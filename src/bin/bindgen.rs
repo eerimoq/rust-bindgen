@@ -117,6 +117,10 @@ fn parse_args(args: &[String]) -> ParseResult {
                     options.override_enum_ty = args[ix + 1].clone();
                     ix += 2;
                 }
+                "-core" => {
+                    options.lib = "core".to_owned();
+                    ix += 1;
+                }
                 _ => {
                     options.clang_args.push(args[ix].clone());
                     ix += 1;
@@ -159,6 +163,8 @@ Options:
                                  slong
                                  ulonglong
                                  slonglong
+    -core                      Depend on the core library instead of the std
+                               library.
 
     Options other than stated above are passed to clang.
 "

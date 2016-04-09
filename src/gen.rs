@@ -26,7 +26,8 @@ use types::*;
 struct GenCtx<'r> {
     ext_cx: base::ExtCtxt<'r>,
     unnamed_ty: usize,
-    span: Span
+    span: Span,
+    lib: String
 }
 
 fn first<A, B>((val, _): (A, B)) -> A {
@@ -139,7 +140,8 @@ pub fn gen_mod(
             &mut feature_gated_cfgs,
         ),
         unnamed_ty: 0,
-        span: span
+        span: span,
+        lib: options.lib.clone()
     };
     ctx.ext_cx.bt_push(ExpnInfo {
         call_site: ctx.span,
@@ -905,11 +907,12 @@ fn gen_comp_methods(ctx: &mut GenCtx, data_field: &str, data_offset: usize,
             let impl_str = format!(r"
                 impl X {{
                     pub unsafe fn {}(&mut self) -> {} {{
-                        let raw: *mut u8 = ::std::mem::transmute(&self.{});
-                        ::std::mem::transmute(raw.offset({}))
+                        let raw: *mut u8 = ::{}::mem::transmute(&self.{});
+                        ::{}::mem::transmute(raw.offset({}))
                     }}
                 }}
-            ", f_name, tts_to_string(&ret_ty.to_tokens(&ctx.ext_cx)[..]), data_field, offset);
+            ", f_name, tts_to_string(&ret_ty.to_tokens(&ctx.ext_cx)[..]),
+                                   ctx.lib, data_field, ctx.lib, offset);
 
             parse::new_parser_from_source_str(ctx.ext_cx.parse_sess(),
                 ctx.ext_cx.cfg(), "".to_owned(), impl_str).parse_item().unwrap().unwrap()
@@ -960,10 +963,10 @@ fn gen_comp_methods(ctx: &mut GenCtx, data_field: &str, data_offset: usize,
 // Implements std::default::Default using std::mem::zeroed.
 fn mk_default_impl(ctx: &GenCtx, ty_name: &str) -> P<ast::Item> {
     let impl_str = format!(r"
-        impl ::std::default::Default for {} {{
-            fn default() -> Self {{ unsafe {{ ::std::mem::zeroed() }} }}
+        impl ::{}::default::Default for {} {{
+            fn default() -> Self {{ unsafe {{ ::{}::mem::zeroed() }} }}
         }}
-    ", ty_name);
+    ", ctx.lib, ty_name, ctx.lib);
 
     parse::new_parser_from_source_str(ctx.ext_cx.parse_sess(),
         ctx.ext_cx.cfg(), "".to_owned(), impl_str).parse_item().unwrap().unwrap()
@@ -972,10 +975,10 @@ fn mk_default_impl(ctx: &GenCtx, ty_name: &str) -> P<ast::Item> {
 // Implements std::clone::Clone using dereferencing
 fn mk_clone_impl(ctx: &GenCtx, ty_name: &str) -> P<ast::Item> {
     let impl_str = format!(r"
-        impl ::std::clone::Clone for {} {{
+        impl ::{}::clone::Clone for {} {{
             fn clone(&self) -> Self {{ *self }}
         }}
-    ", ty_name);
+    ", ctx.lib, ty_name);
 
     parse::new_parser_from_source_str(ctx.ext_cx.parse_sess(),
         ctx.ext_cx.cfg(), "".to_owned(), impl_str).parse_item().unwrap().unwrap()
@@ -1198,7 +1201,7 @@ fn cty_to_rs(ctx: &mut GenCtx, ty: &Type) -> ast::Ty {
             ILong => mk_ty(ctx, true, raw("c_long")),
             IULong => mk_ty(ctx, true, raw("c_ulong")),
             ILongLong => mk_ty(ctx, true, raw("c_longlong")),
-            IULongLong => mk_ty(ctx, true, raw("c_ulonglong"))
+            IULongLong => mk_ty(ctx, true, raw("c_longlong"))
         },
         TFloat(f, _) => match f {
             FFloat => mk_ty(ctx, true, raw("c_float")),
@@ -1329,7 +1332,7 @@ fn mk_fnty(ctx: &mut GenCtx,
 
     let segs = vec![
         ast::PathSegment {
-            identifier: ctx.ext_cx.ident_of("std"),
+            identifier: ctx.ext_cx.ident_of(&ctx.lib[..]),
             parameters: ast::PathParameters::AngleBracketed(ast::AngleBracketedParameterData {
                 lifetimes: Vec::new(),
                 types: OwnedSlice::empty(),

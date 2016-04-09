@@ -115,6 +115,7 @@ pub struct BindgenOptions {
     pub override_enum_ty: String,
     pub clang_args: Vec<String>,
     pub derive_debug: bool,
+    pub lib: String,
 }
 
 impl Default for BindgenOptions {
@@ -131,7 +132,8 @@ impl Default for BindgenOptions {
                 Some(path) => vec!("-idirafter".to_owned(), path),
                 None => Vec::new()
             },
-            derive_debug: true
+            derive_debug: true,
+            lib: "std".to_owned(),
         }
     }
 }
